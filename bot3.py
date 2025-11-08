@@ -1,15 +1,3 @@
-#!/usr/bin/env python3
-"""
-Merged OTP Bot v4 — features:
-- Multi-panel OTP fetching (Panel-1, Panel-2)
-- /status, /pauseall, /resumeall, /panel <name> on|off
-- Auto-recovery: login retry counter -> auto-pause + admin alert
-- Notification system for admin (auto-paused, flood control, login failed)
-- Inline control menu (/control) with buttons
-- Flask API to toggle panels
-- Green terminal logs
-"""
-
 import os
 import re
 import time
@@ -353,15 +341,28 @@ def panel_fetch_loop(panel: dict, session: requests.Session):
 # -------------------------
 # Telegram commands & listener
 # -------------------------
+# -------------------------
+# ✅ Admin-only access checker
+# -------------------------
+async def admin_only(update, context):
+    """Return True if user is admin, else deny access."""
+    user_id = update.effective_user.id
+    if user_id != ADMIN_ID:
+        await update.message.reply_text("❌ You are not authorized to use this command.")
+        return False
+    return True
+
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 <b>Merged Number Bot</b>\n"
-        "Use /help to see commands.",
+        "🤖 <b>H2I Number Bot</b>\n",
         parse_mode="HTML",
         disable_web_page_preview=True
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await admin_only(update, context):  # check admin
+        return
+
     help_text = (
         "📘 <b>Available Commands</b>\n"
         "━━━━━━━━━━━━━━━━━━━\n"
@@ -369,85 +370,72 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/start - Show bot info\n"
         "/help - Display this help menu\n"
         "/status - Show panel statuses and OTP counts\n\n"
-
         "🧠 <b>Panel Control</b>\n"
         "/panel &lt;Panel-Name&gt; on|off - Enable or disable a specific panel\n"
         "/pauseall - Pause all panels\n"
         "/resumeall - Resume all panels\n"
         "/control - Inline buttons to pause/resume panels\n\n"
-
         "⚙️ <b>Admin Tools</b>\n"
-        "/addchat &lt;chat_id&gt; - Add a new group or channel for OTP delivery\n"
-        "/removechat &lt;chat_id&gt; - Remove a group or channel\n\n"
-
+        "/addchat &lt;chat_id&gt; - Add group for OTP delivery\n"
+        "/removechat &lt;chat_id&gt; - Remove group from list\n\n"
         "📢 <b>Notifications</b>\n"
-        "🔔 Admin gets alerts for:\n"
-        "   • Panel auto-paused after 3 failed logins\n"
-        "   • Flood control activation (rate limit)\n"
-        "   • Auto-resume after cooldown\n\n"
-
-        "━━━━━━━━━━━━━━━━━━━\n"
-        "💡 Tip: Use /control for quick inline panel toggles.\n"
-        "🧩 Use /status anytime to monitor running panels.\n"
+        "🔔 Alerts for:\n"
+        "• Panel auto-paused after 3 failed logins\n"
+        "• Flood control active\n"
+        "• Auto-resume after cooldown\n"
     )
     await update.message.reply_text(help_text, parse_mode="HTML", disable_web_page_preview=True)
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # show status for each known panel
-    lines = ["🧩 <b>Panel Status</b>\n━━━━━━━━━━━━━━━━━━━"]
-    total = 0
-    for pname in panel_status.keys():
-        st = panel_status[pname]
-        status_emoji = "✅ Running" if st else "⏸ Paused"
-        uptime = ""
-        if panel_start_time.get(pname):
-            uptime_delta = datetime.now() - panel_start_time[pname]
-            mins = int(uptime_delta.total_seconds() // 60)
-            uptime = f" | Uptime: {mins}m"
-        count = panel_otp_count.get(pname, 0)
-        last = last_otp_time.get(pname)
-        last_str = last.strftime("%Y-%m-%d %H:%M:%S") if last else "N/A"
-        lines.append(f"{pname} — {status_emoji} | OTPs: {count} | Last: {last_str}{uptime}")
-        total += count
-    lines.append("━━━━━━━━━━━━━━━━━━━")
-    lines.append(f"Total OTPs (since start): {total}")
-    await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+    if not await admin_only(update, context):
+        return
 
-async def toggle_panel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update):
-        return await update.message.reply_text("❌ You are not allowed to use this command.")
+    status_lines = ["🧩 <b>Panel Status</b>\n━━━━━━━━━━━━━━━━━━━"]
+    for panel_name, is_active in panel_status.items():
+        emoji = "✅ Running" if is_active else "⏸ Paused"
+        status_lines.append(f"{panel_name}: {emoji}")
+    status_text = "\n".join(status_lines)
+    await update.message.reply_text(status_text, parse_mode="HTML")
+
+async def toggle_panel(update, context: ContextTypes.DEFAULT_TYPE):
+    if not await admin_only(update, context):
+        return
     if len(context.args) < 2:
         return await update.message.reply_text("Usage: /panel <Panel-Name> on|off")
+
     name, action = context.args[0], context.args[1].lower()
     if name not in panel_status:
-        return await update.message.reply_text("⚠️ Unknown panel: " + name)
-    if action not in ("on", "off"):
-        return await update.message.reply_text("Use 'on' or 'off'")
-    panel_status[name] = (action == "on")
-    text = f"✅ {name} {'resumed' if action=='on' else 'paused'}."
-    tlog(f"{name} {'resumed' if action=='on' else 'paused'} via Telegram command.")
-    await update.message.reply_text(text)
+        return await update.message.reply_text(f"⚠️ Unknown panel: {name}")
+    if action not in ["on", "off"]:
+        return await update.message.reply_text("⚙️ Use 'on' or 'off' only")
 
-async def pauseall_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update):
-        return await update.message.reply_text("❌ You are not allowed to use this command.")
+    panel_status[name] = (action == "on")
+    status_text = "▶️ resumed" if action == "on" else "⏸ paused"
+    await update.message.reply_text(f"✅ {name} {status_text}.")
+    tlog(f"{name} {status_text} via Telegram command.")
+
+async def pauseall_command(update, context: ContextTypes.DEFAULT_TYPE):
+    if not await admin_only(update, context):
+        return
+
     for k in panel_status.keys():
         panel_status[k] = False
-    tlog("⏸ All panels paused via Telegram command.")
-    await update.message.reply_text("✅ All panels paused.")
+    await update.message.reply_text("⏸ All panels paused.")
+    tlog("All panels paused by admin.")
 
-async def resumeall_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update):
-        return await update.message.reply_text("❌ You are not allowed to use this command.")
+
+async def resumeall_command(update, context: ContextTypes.DEFAULT_TYPE):
+    if not await admin_only(update, context):
+        return
+
     for k in panel_status.keys():
         panel_status[k] = True
-        panel_start_time.setdefault(k, datetime.now())
-    tlog("▶️ All panels resumed via Telegram command.")
-    await update.message.reply_text("✅ All panels resumed.")
+    await update.message.reply_text("▶️ All panels resumed.")
+    tlog("All panels resumed by admin.")
 
-async def add_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update):
-        return await update.message.reply_text("❌ You are not allowed to use this command.")
+async def add_chat(update, context: ContextTypes.DEFAULT_TYPE):
+    if not await admin_only(update, context):
+        return
     if not context.args:
         return await update.message.reply_text("Usage: /addchat <chat_id>")
     chat_id = context.args[0]
@@ -457,9 +445,10 @@ async def add_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("⚠️ Already present.")
 
-async def remove_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update):
-        return await update.message.reply_text("❌ You are not allowed to use this command.")
+
+async def remove_chat(update, context: ContextTypes.DEFAULT_TYPE):
+    if not await admin_only(update, context):
+        return
     if not context.args:
         return await update.message.reply_text("Usage: /removechat <chat_id>")
     chat_id = context.args[0]
@@ -504,9 +493,9 @@ def start_telegram_listener():
     tg_app.add_handler(CommandHandler("start", start_command))
     tg_app.add_handler(CommandHandler("help", help_command))
     tg_app.add_handler(CommandHandler("status", status_command))
-    tg_app.add_handler(CommandHandler("panel", toggle_panel_cmd))
-    tg_app.add_handler(CommandHandler("pauseall", pauseall_cmd))
-    tg_app.add_handler(CommandHandler("resumeall", resumeall_cmd))
+    tg_app.add_handler(CommandHandler("panel", toggle_panel))
+    tg_app.add_handler(CommandHandler("pauseall", pauseall_command))
+    tg_app.add_handler(CommandHandler("resumeall", resumeall_command))
     tg_app.add_handler(CommandHandler("addchat", add_chat))
     tg_app.add_handler(CommandHandler("removechat", remove_chat))
     tg_app.add_handler(CommandHandler("control", control_cmd))
