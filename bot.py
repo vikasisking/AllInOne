@@ -217,17 +217,17 @@ async def send_telegram_message(source_label, current_time, country, number, sen
             panel_otp_count[source_label] += 1
             last_otp_time[source_label] = datetime.now()
         except Exception as e:
-    estr = str(e).lower()
-    tlog(f"❌ Failed to send to {chat_id}: {e}", level="error")
+            estr = str(e).lower()
+            tlog(f"❌ Failed to send to {chat_id}: {e}", level="error")
 
     # ---------- NEW ADMIN ALERT FOR ACCESS PROBLEMS ----------
-    if "kicked" in estr or "forbidden" in estr or "not enough rights" in estr:
-        send_admin_alert_async(
-            f"❌ ERROR while sending OTP\n"
-            f"Chat ID: {chat_id}\n"
-            f"Reason: {e}\n\n"
-            f"⚠️ Bot removed OR no send rights — Fix group permissions!"
-        )
+            if "kicked" in estr or "forbidden" in estr or "not enough rights" in estr:
+                send_admin_alert_async(
+                    f"❌ ERROR while sending OTP\n"
+                    f"Chat ID: {chat_id}\n"
+                    f"Reason: {e}\n\n"
+                    f"⚠️ Bot removed OR no send rights — Fix group permissions!"
+           )
     # ---------- END ----------
             # If flood control or RetryAfter detected, auto-pause that panel and notify admin
             if "retryafter" in estr or "too many requests" in estr or "flood" in estr:
