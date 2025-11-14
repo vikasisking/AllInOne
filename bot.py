@@ -1,5 +1,3 @@
-# (पूरा आपका मौजूदा फाइल — बस P3 और संबंधित स्टार्ट-अप जोड़ दिया गया है)
-
 import os
 import re
 import time
@@ -26,8 +24,8 @@ from telegram.ext import (
 # -------------------------
 # CONFIG (user provided)
 # -------------------------
-BOT_TOKEN = "8445473322:AAER8MAIhZMTW3RQW1vSKYC00CZ1tTOF2QQ"
-CHAT_IDS = ["-1003192323648"]   # primary group
+BOT_TOKEN = "8326711274:AAHY_wx4ZK5i4Wz10lYuiLruPKEQXG6WMPM"
+CHAT_IDS = ["-1001926462756"]   # primary group
 CHANNEL_LINK = "https://t.me/freeotpss"
 ADMIN_ID = 7761576669
 ADMIN_CHAT_ID = str(ADMIN_ID)
@@ -70,21 +68,6 @@ P2 = {
     }
 }
 
-# -------------------------
-# NEW: Panel 3 (same as Panel-2 but different creds)
-# -------------------------
-P3 = {
-    "name": "Panel-3",
-    # using same endpoints as Panel-2 (as requested "same as 2nd panel")
-    "login_url": P2["login_url"],
-    "login_page": P2["login_page"],
-    "xhr_url": P2["xhr_url"],
-    "username": os.getenv("USERNAME3", "h2ideveloper899"),  # override via env var USERNAME3
-    "password": os.getenv("PASSWORD3", "445566"),         # override via env var PASSWORD3
-    "headers": P2["headers"].copy(),
-    "ajax_headers": P2["ajax_headers"].copy()
-}
-
 EXTRA_CODES = {"Kosovo": "XK"}
 
 # -------------------------
@@ -94,8 +77,7 @@ app = Flask(__name__)
 bot = telegram.Bot(token=BOT_TOKEN)
 session1 = requests.Session()
 session2 = requests.Session()
-session3 = requests.Session()  # session for panel-3
-seen = set()   # shared across all panels to avoid duplicates
+seen = set()   # shared across both panels to avoid duplicates
 lock = threading.Lock()
 
 # -------------------------
@@ -115,28 +97,11 @@ logger = logging.getLogger("merged-otp-bot")
 panel_status = {
     "Panel-1": True,
     "Panel-2": True,
-    "Panel-3": True,   # added Panel-3
 }
-panel_start_time = {
-    "Panel-1": datetime.now(),
-    "Panel-2": datetime.now(),
-    "Panel-3": datetime.now(),
-}
-failure_counter = {
-    "Panel-1": 0,
-    "Panel-2": 0,
-    "Panel-3": 0,
-}   # track consecutive login failures
-panel_otp_count = {
-    "Panel-1": 0,
-    "Panel-2": 0,
-    "Panel-3": 0,
-}
-last_otp_time = {
-    "Panel-1": None,
-    "Panel-2": None,
-    "Panel-3": None,
-}
+panel_start_time = { "Panel-1": datetime.now(), "Panel-2": datetime.now() }
+failure_counter = { "Panel-1": 0, "Panel-2": 0 }   # track consecutive login failures
+panel_otp_count = { "Panel-1": 0, "Panel-2": 0 }
+last_otp_time = { "Panel-1": None, "Panel-2": None }
 
 def tlog(msg, level="info"):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -149,7 +114,7 @@ def tlog(msg, level="info"):
         logger.error(f"{RED}{msg}{RESET}")
     else:
         logger.info(colored)
-        
+
 # -------------------------
 # Utilities
 # -------------------------
@@ -570,13 +535,11 @@ def panel_control(name, action):
 # -------------------------
 def main():
     tlog("Starting merged bot v4...", level="info")
-    # start fetch threads for all panels
+    # start fetch threads for both panels
     t1 = threading.Thread(target=panel_fetch_loop, args=(P1, session1), daemon=True)
     t2 = threading.Thread(target=panel_fetch_loop, args=(P2, session2), daemon=True)
-    t3 = threading.Thread(target=panel_fetch_loop, args=(P3, session3), daemon=True)  # new panel-3 thread
     t1.start()
     t2.start()
-    t3.start()
 
     # start flask in background (use 8081 to avoid conflicts)
     flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=8081), daemon=True)
