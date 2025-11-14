@@ -24,8 +24,8 @@ from telegram.ext import (
 # -------------------------
 # CONFIG (user provided)
 # -------------------------
-BOT_TOKEN = "8326711274:AAHY_wx4ZK5i4Wz10lYuiLruPKEQXG6WMPM"
-CHAT_IDS = ["-1001926462756"]   # primary group
+BOT_TOKEN = "8361669889:AAG1yhhuj-shI07BWRUBGzem-SfokBbQCX0"
+CHAT_IDS = ["-1002822806611"]   # primary group
 CHANNEL_LINK = "https://t.me/freeotpss"
 ADMIN_ID = 7761576669
 ADMIN_CHAT_ID = str(ADMIN_ID)
