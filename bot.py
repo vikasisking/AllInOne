@@ -188,7 +188,7 @@ async def send_telegram_message(source_label, current_time, country, number, sen
         f"━━━━━━━━━━━━━━━━━━━\n"
         f"💬 <b>Message:</b>\n"
         f"<code>{html.escape(message)}</code>\n"
-        f"<b> Develop By H2I HUB </b>"\n
+        f"<b> Develop By H2I HUB </b>\n"
         f"━━━━━━━━━━━━━━━━━━━"
     )
 
